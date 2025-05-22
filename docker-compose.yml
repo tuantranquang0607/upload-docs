@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile # We will create this later
+    ports:
+      - "3001:3001" # Assuming backend runs on port 3001
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/document_processing
+      - NODE_ENV=development
+    volumes:
+      - ./backend:/usr/src/app
+      - /usr/src/app/node_modules # Mount node_modules separately to avoid overriding by local mounts
+    depends_on:
+      - db
+      - tika
+    # command: npm run dev # We'll set the appropriate command later
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile # We will create this later
+    ports:
+      - "3000:3000" # Standard React development port
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # Mount node_modules separately
+    depends_on:
+      - backend
+    # command: npm start # We'll set the appropriate command later
+
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: document_processing
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  tika:
+    image: apache/tika:latest-full # Using the latest full image for Tika
+    ports:
+      - "9998:9998" # Default Tika port
+
+volumes:
+  postgres_data:
