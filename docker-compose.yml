@@ -6,7 +6,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "3001:3001" # Assuming backend runs on port 3001
+      - "3011:3001" # Assuming backend runs on port 3001
     environment:
       - DATABASE_URL=postgresql://user:password@db:5432/document_processing
       - NODE_ENV=development
@@ -16,25 +16,25 @@ services:
     depends_on:
       - db
       - tika
-    command: npm run dev
+    command: sh -c "npm install && npm run dev"
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: http://localhost:3011
     ports:
-      - "3000:80"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - "3020:80"
+    # volumes:
     depends_on:
       - backend
-    command: npm start
+    command: serve -s build -l 80
 
   db:
     image: postgres:15-alpine
     ports:
-      - "5432:5432"
+      - "5430:5432"
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
@@ -45,7 +45,7 @@ services:
   tika:
     image: apache/tika:latest-full # Using the latest full image for Tika
     ports:
-      - "9998:9998" # Default Tika port
+      - "9988:9998" # Default Tika port
 
 volumes:
   postgres_data:

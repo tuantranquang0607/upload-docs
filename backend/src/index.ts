@@ -1,14 +1,33 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
 import FormData from 'form-data';
 import { initializeDatabase, insertDocument, updateDocumentStatusAndText, getDocumentById, listDocuments } from './db';
+// Import CORS middleware
+import cors from 'cors';
 import logger from './util/logger';
+
+// Helper to wrap async route handlers and pass errors to Express
+function wrapAsync(fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) {
+  return function (req: Request, res: Response, next: NextFunction) {
+    fn(req, res, next).catch(next);
+  };
+}
 
 // Initialize Express application
 const app = express();
+
+// Enable CORS for requests from http://localhost:3020
+app.use(cors({
+  origin: 'http://localhost:3020'
+}));
+/**
+ * Explicitly handle CORS preflight (OPTIONS) requests for /api/upload.
+ * This ensures that browsers receive the correct CORS headers and do not get a 405 error.
+ */
+app.options('/api/upload', cors());
 // Define the port for the server, fallback to 3001 if not specified in environment
 const port = process.env.PORT || 3001;
 // Define the URL for the Tika service, fallback to local Docker service if not specified
@@ -55,7 +74,20 @@ app.get('/', (req: Request, res: Response) => {
  * the file is sent to Tika for text extraction, and the database record is updated.
  * The temporary file is deleted afterwards.
  */
-app.post('/api/upload', upload.single('document'), async (req: Request, res: Response, next: NextFunction) => {
+app.post(
+  '/api/upload',
+  upload.single('document'),
+  wrapAsync(async (req: Request, res: Response, next: NextFunction) => {
+  logger.info(`[UPLOAD] Method: ${req.method}, Headers: ${JSON.stringify(req.headers)}`);
+  logger.info(`[UPLOAD] Multer file: ${req.file ? JSON.stringify({
+    fieldname: req.file.fieldname,
+    originalname: req.file.originalname,
+    mimetype: req.file.mimetype,
+    size: req.file.size,
+    filename: req.file.filename,
+    path: req.file.path
+  }) : 'No file received'}`);
+
   if (!req.file) {
     return res.status(400).send({ message: 'No file uploaded.' });
   }
@@ -70,24 +102,28 @@ app.post('/api/upload', upload.single('document'), async (req: Request, res: Res
 
     // Create a readable stream for the uploaded file
     const fileStream = fs.createReadStream(filePath);
-    const formData = new FormData();
-    formData.append('file', fileStream); // 'file' is the field Tika expects
 
     logger.info(`Sending file ${originalname} (ID: ${documentId}) to Tika...`);
-    // Send file to Tika for text extraction
-    const tikaResponse = await axios.post(TIKA_URL, formData, {
+    // Send file to Tika for text extraction as raw body with correct Content-Type
+    const tikaResponse = await axios.put(TIKA_URL, fileStream, {
       headers: {
-        ...formData.getHeaders(), // Set correct headers for multipart/form-data
+        'Content-Type': mimetype, // Use mimetype from multer
         'Accept': 'text/plain'    // Request plain text from Tika
       },
       maxBodyLength: Infinity,    // Allow for large request bodies
       maxContentLength: Infinity  // Allow for large response bodies
     });
     const extractedText = tikaResponse.data;
+    logger.info(`[TIKA-EXTRACTED] ID: ${documentId}, Filename: ${originalname}, ExtractedText: ${extractedText}`);
     logger.info(`Extracted text from ${originalname} (ID: ${documentId}).`);
 
     // Update the document record with the extracted text and 'completed' status
-    await updateDocumentStatusAndText(documentId, 'completed', extractedText);
+    if (typeof documentId === 'number') {
+      await updateDocumentStatusAndText(documentId, 'completed', extractedText);
+    } else {
+      logger.error('Document ID is null after insert; cannot update status and text.');
+      return res.status(500).send({ message: 'Internal error: Document ID missing.' });
+    }
     logger.info(`Updated document (ID: ${documentId}) status to 'completed' and stored text.`);
 
     // Respond to the client with success
@@ -119,13 +155,16 @@ app.post('/api/upload', upload.single('document'), async (req: Request, res: Res
       else logger.info(`Deleted temp file ${filePath} (ID: ${documentId || 'N/A'}).`);
     });
   }
-});
+  })
+);
 
 /**
  * GET /api/document/:id
  * Retrieves a specific document by its ID, including its metadata and extracted text.
  */
-app.get('/api/document/:id', async (req: Request, res: Response, next: NextFunction) => {
+app.get(
+  '/api/document/:id',
+  wrapAsync(async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
@@ -139,13 +178,16 @@ app.get('/api/document/:id', async (req: Request, res: Response, next: NextFunct
   } catch (error) {
     next(error); // Pass errors to the global error handler
   }
-});
+  })
+);
 
 /**
  * GET /api/document/:id/status
  * Retrieves the current processing status of a specific document by its ID.
  */
-app.get('/api/document/:id/status', async (req: Request, res: Response, next: NextFunction) => {
+app.get(
+  '/api/document/:id/status',
+  wrapAsync(async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
@@ -159,34 +201,36 @@ app.get('/api/document/:id/status', async (req: Request, res: Response, next: Ne
   } catch (error) {
     next(error); // Pass errors to the global error handler
   }
-});
+  })
+);
 
 /**
  * GET /api/documents
  * Returns a list of all uploaded documents.
  */
-app.get('/api/documents', async (req: Request, res: Response, next: NextFunction) => {
-  try {
+app.get(
+  '/api/documents',
+  wrapAsync(async (req: Request, res: Response, next: NextFunction) => {
     const docs = await listDocuments();
     res.status(200).send(docs);
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
 // Global error handling middleware.
 // This catches any errors passed by `next(error)` calls in route handlers.
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
   logger.error(`Global Error Handler: ${err.message}`);
   logger.error(err.stack || '');
 
   // Specific handling for Multer errors (e.g., file too large)
   if (err instanceof multer.MulterError) {
-    return res.status(400).send({ message: `Multer error: ${err.message}` });
+    res.status(400).send({ message: `Multer error: ${err.message}` });
+    return;
   }
   // Generic error response
   res.status(500).send({ message: err.message || 'An unexpected error occurred.' });
-});
+};
+app.use(errorHandler);
 
 // Asynchronous function to start the server.
 // This ensures that database initialization is complete before the server starts listening for requests.

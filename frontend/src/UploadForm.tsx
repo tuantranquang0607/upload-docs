@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 // UploadForm allows users to select a document and POST it to `/api/upload`.
 // When processing finishes, the extracted text is displayed below the form.
 
+const apiBaseUrl = process.env.REACT_APP_API_URL || '';
+
 const UploadForm: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [text, setText] = useState('');
@@ -16,7 +18,7 @@ const UploadForm: React.FC = () => {
     data.append('document', file);
 
     try {
-      const res = await fetch('/api/upload', {
+      const res = await fetch(`${apiBaseUrl}/api/upload`, {
         method: 'POST',
         body: data
       });
@@ -25,11 +27,11 @@ const UploadForm: React.FC = () => {
 
       // poll for processing
       for (let i = 0; i < 10; i++) {
-        const statusRes = await fetch(`/api/document/${documentId}`);
+        const statusRes = await fetch(`${apiBaseUrl}/api/document/${documentId}`);
         if (statusRes.ok) {
           const doc = await statusRes.json();
-          if (doc.extracted_text) {
-            setText(doc.extracted_text);
+          if (doc.status === 'completed') {
+            setText(doc.extracted_text || '');
             return;
           }
         }
