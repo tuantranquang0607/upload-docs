@@ -1,9 +1,10 @@
 import { Pool } from 'pg';
+import logger from './util/logger';
 
 // Ensure DATABASE_URL is set, otherwise the application cannot function.
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
-  console.error('FATAL: DATABASE_URL environment variable is not set.');
+  logger.error('FATAL: DATABASE_URL environment variable is not set.');
   process.exit(1); // Exit if DB URL is not found, as it's critical
 }
 
@@ -19,12 +20,12 @@ const pool = new Pool({
 
 // Event listener for new client connections.
 pool.on('connect', () => {
-  console.log('Connected to PostgreSQL database!');
+  logger.info('Connected to PostgreSQL database!');
 });
 
 // Event listener for errors that occur on idle clients.
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
+  logger.error(`Unexpected error on idle client: ${err}`);
   process.exit(-1); // Exit on pool errors to prevent undefined behavior
 });
 
@@ -38,7 +39,7 @@ export const initializeDatabase = async () => {
   try {
     // Test query to ensure connection is working
     await client.query('SELECT NOW()');
-    console.log('Database connection test successful.');
+    logger.info('Database connection test successful.');
 
     // SQL to create the 'documents' table if it doesn't already exist.
     // This table stores metadata and extracted text for uploaded documents.
@@ -56,10 +57,10 @@ export const initializeDatabase = async () => {
       );
     `;
     await client.query(createTableQuery);
-    console.log('Table "documents" checked/created successfully.');
+    logger.info('Table "documents" checked/created successfully.');
 
   } catch (err) {
-    console.error('Error initializing database or creating table:', err);
+    logger.error(`Error initializing database or creating table: ${err}`);
     throw err; // Re-throw to be caught by application startup logic
   } finally {
     client.release(); // Release the client back to the pool
