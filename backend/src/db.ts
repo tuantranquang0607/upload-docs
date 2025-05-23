@@ -117,3 +117,13 @@ export const getDocumentById = async (id: number) => {
 
 // Export the pool itself if direct access is needed (though using query function is preferred)
 export default pool;
+
+/**
+ * Retrieves all documents from the database ordered by upload timestamp.
+ */
+export const listDocuments = async () => {
+  const result = await query(
+    'SELECT id, filename, originalname, mimetype, size, status, upload_timestamp, processing_timestamp FROM documents ORDER BY upload_timestamp DESC'
+  );
+  return result.rows;
+};

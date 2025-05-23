@@ -4,7 +4,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile # We will create this later
+      dockerfile: Dockerfile
     ports:
       - "3001:3001" # Assuming backend runs on port 3001
     environment:
@@ -12,24 +12,24 @@ services:
       - NODE_ENV=development
     volumes:
       - ./backend:/usr/src/app
-      - /usr/src/app/node_modules # Mount node_modules separately to avoid overriding by local mounts
+      - /usr/src/app/node_modules
     depends_on:
       - db
       - tika
-    # command: npm run dev # We'll set the appropriate command later
+    command: npm run dev
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile # We will create this later
+      dockerfile: Dockerfile
     ports:
-      - "3000:3000" # Standard React development port
+      - "3000:80"
     volumes:
       - ./frontend:/app
-      - /app/node_modules # Mount node_modules separately
+      - /app/node_modules
     depends_on:
       - backend
-    # command: npm start # We'll set the appropriate command later
+    command: npm start
 
   db:
     image: postgres:15-alpine
