@@ -20,6 +20,14 @@ docker-compose up --build
 The backend will be available at `http://localhost:3001` and the frontend at `http://localhost:3000`.
 
 Open the frontend in your browser and use the simple form to upload a document. Once processed the extracted text will be displayed.
+### Upload Workflow
+
+1. Start the stack with `docker-compose up --build`.
+2. Visit `http://localhost:3000`.
+3. Select a file with the upload form and click **Upload**.
+4. The file is POSTed to `/api/upload` on the backend.
+5. When processing completes, the extracted text appears below the form.
+
 
 ## Development Plan
 

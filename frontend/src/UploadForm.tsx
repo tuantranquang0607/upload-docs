@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 
+// UploadForm allows users to select a document and POST it to `/api/upload`.
+// When processing finishes, the extracted text is displayed below the form.
+
 const UploadForm: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [text, setText] = useState('');
