@@ -1,0 +1,36 @@
+name: CI
+on:
+  push:
+    branches: [ work ]
+  pull_request:
+    branches: [ work ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: document_processing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready" --health-interval=10s --health-timeout=5s --health-retries=5
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Install backend deps
+        run: npm install --prefix backend
+      - name: Run backend tests
+        run: npm test --prefix backend
+      - name: Install frontend deps
+        run: npm install --prefix frontend
+      - name: Run frontend unit tests
+        run: npm test --prefix frontend -- --watchAll=false
+      - name: Run Playwright tests
+        run: npx playwright install-deps && npm run test:e2e --prefix frontend

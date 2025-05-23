@@ -4,7 +4,8 @@ import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
 import FormData from 'form-data';
-import { initializeDatabase, insertDocument, updateDocumentStatusAndText, getDocumentById } from './db';
+import { initializeDatabase, insertDocument, updateDocumentStatusAndText, getDocumentById, listDocuments } from './db';
+import logger from './util/logger';
 
 // Initialize Express application
 const app = express();
@@ -36,7 +37,7 @@ const upload = multer({ storage: storage });
 
 // Basic logging middleware to log all incoming requests
 app.use((req: Request, res: Response, next: NextFunction) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  logger.info(`${req.method} ${req.url}`);
   next();
 });
 
@@ -65,14 +66,14 @@ app.post('/api/upload', upload.single('document'), async (req: Request, res: Res
   try {
     // Insert initial document record into the database with 'processing' status
     documentId = await insertDocument(filename, originalname, mimetype, size);
-    console.log(`[${new Date().toISOString()}] Inserted document record with ID: ${documentId}`);
+    logger.info(`Inserted document record with ID: ${documentId}`);
 
     // Create a readable stream for the uploaded file
     const fileStream = fs.createReadStream(filePath);
     const formData = new FormData();
     formData.append('file', fileStream); // 'file' is the field Tika expects
 
-    console.log(`[${new Date().toISOString()}] Sending file ${originalname} (ID: ${documentId}) to Tika...`);
+    logger.info(`Sending file ${originalname} (ID: ${documentId}) to Tika...`);
     // Send file to Tika for text extraction
     const tikaResponse = await axios.post(TIKA_URL, formData, {
       headers: {
@@ -83,11 +84,11 @@ app.post('/api/upload', upload.single('document'), async (req: Request, res: Res
       maxContentLength: Infinity  // Allow for large response bodies
     });
     const extractedText = tikaResponse.data;
-    console.log(`[${new Date().toISOString()}] Extracted text from ${originalname} (ID: ${documentId}).`);
+    logger.info(`Extracted text from ${originalname} (ID: ${documentId}).`);
 
     // Update the document record with the extracted text and 'completed' status
     await updateDocumentStatusAndText(documentId, 'completed', extractedText);
-    console.log(`[${new Date().toISOString()}] Updated document (ID: ${documentId}) status to 'completed' and stored text.`);
+    logger.info(`Updated document (ID: ${documentId}) status to 'completed' and stored text.`);
 
     // Respond to the client with success
     res.status(200).send({
@@ -98,14 +99,14 @@ app.post('/api/upload', upload.single('document'), async (req: Request, res: Res
     });
 
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error during document processing (ID: ${documentId || 'N/A'}):`, error);
+    logger.error(`Error during document processing (ID: ${documentId || 'N/A'}): ${error}`);
     // If an error occurs after the document record was created, update its status to 'error'
     if (documentId) {
       try {
         await updateDocumentStatusAndText(documentId, 'error', 'Processing failed. Check logs.');
       } catch (dbError) {
         // Log critical error if updating status fails
-        console.error(`[${new Date().toISOString()}] CRITICAL: Failed to update document (ID: ${documentId}) status to 'error':`, dbError);
+        logger.error(`CRITICAL: Failed to update document (ID: ${documentId}) status to 'error': ${dbError}`);
       }
     }
     // Pass the error to the global error handler
@@ -114,8 +115,8 @@ app.post('/api/upload', upload.single('document'), async (req: Request, res: Res
   } finally {
     // Always attempt to delete the temporary file from the 'uploads' directory
     fs.unlink(filePath, (err) => {
-      if (err) console.error(`[${new Date().toISOString()}] Error deleting temp file ${filePath} (ID: ${documentId || 'N/A'}):`, err);
-      else console.log(`[${new Date().toISOString()}] Deleted temp file ${filePath} (ID: ${documentId || 'N/A'}).`);
+      if (err) logger.error(`Error deleting temp file ${filePath} (ID: ${documentId || 'N/A'}): ${err}`);
+      else logger.info(`Deleted temp file ${filePath} (ID: ${documentId || 'N/A'}).`);
     });
   }
 });
@@ -160,11 +161,24 @@ app.get('/api/document/:id/status', async (req: Request, res: Response, next: Ne
   }
 });
 
+/**
+ * GET /api/documents
+ * Returns a list of all uploaded documents.
+ */
+app.get('/api/documents', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const docs = await listDocuments();
+    res.status(200).send(docs);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Global error handling middleware.
 // This catches any errors passed by `next(error)` calls in route handlers.
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error(`[${new Date().toISOString()}] Global Error Handler: ${err.message}`);
-  console.error(err.stack);
+  logger.error(`Global Error Handler: ${err.message}`);
+  logger.error(err.stack || '');
 
   // Specific handling for Multer errors (e.g., file too large)
   if (err instanceof multer.MulterError) {
@@ -180,13 +194,17 @@ const startServer = async () => {
   try {
     await initializeDatabase(); // Initialize database connection and tables
     app.listen(port, () => {
-      console.log(`Backend server listening at http://localhost:${port}`);
+      logger.info(`Backend server listening at http://localhost:${port}`);
     });
   } catch (error) {
-    console.error('Failed to start the server:', error);
+    logger.error(`Failed to start the server: ${error}`);
     process.exit(1); // Exit if server fails to start (e.g., DB connection issue)
   }
 };
 
-// Start the server
-startServer();
+// Start the server when this module is executed directly
+if (require.main === module) {
+  startServer();
+}
+
+export { app, startServer };
