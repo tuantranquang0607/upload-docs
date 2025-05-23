@@ -76,6 +76,10 @@ Here are the primary API endpoints:
     - Replace `:id` with the document's ID.
     - Example: `curl http://localhost:3001/api/document/1/status`
 
+- **`GET /api/documents`**:
+    - Returns a list of all uploaded documents and their metadata.
+    - Example: `curl http://localhost:3001/api/documents`
+
 ## Project Structure
 
 - `src/`: Contains the TypeScript source code.
