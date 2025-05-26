@@ -19,5 +19,8 @@
   "bugs": {
     "url": "https://github.com/tuantranquang0607/upload-docs/issues"
   },
-  "homepage": "https://github.com/tuantranquang0607/upload-docs#readme"
+  "homepage": "https://github.com/tuantranquang0607/upload-docs#readme",
+  "dependencies": {
+    "dotenv": "^16.5.0"
+  }
 }
