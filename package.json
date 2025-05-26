@@ -1,0 +1,23 @@
+{
+  "name": "upload-docs",
+  "version": "1.0.0",
+  "description": "This repository contains a proof‑of‑concept for uploading documents, extracting text with Apache Tika and storing results in PostgreSQL. The project consists of a React frontend and an Express/TypeScript backend.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tuantranquang0607/upload-docs.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tuantranquang0607/upload-docs/issues"
+  },
+  "homepage": "https://github.com/tuantranquang0607/upload-docs#readme"
+}
