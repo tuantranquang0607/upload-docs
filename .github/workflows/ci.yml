@@ -40,6 +40,6 @@ jobs:
           name: test-results
           path: |
             backend/test-results.xml
-            frontend/test-results.xml
-            frontend/playwright-report/
+            frontend/test-results/
+            playwright-report/
           retention-days: 30
